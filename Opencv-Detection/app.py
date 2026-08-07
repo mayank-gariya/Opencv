@@ -51,7 +51,6 @@ def get_image_from_camera(camera_input) -> np.ndarray:
     """Convert camera input to BGR numpy array."""
     if camera_input is None:
         return None
-    # camera_input is already a BytesIO-like object – use directly
     img = Image.open(camera_input)
     img_rgb = np.array(img.convert("RGB"))
     return cv.cvtColor(img_rgb, cv.COLOR_RGB2BGR)
@@ -158,7 +157,7 @@ with st.sidebar:
 
     st.subheader("Drawing Options")
     shape = st.selectbox("Shape", ["None", "Rectangle", "Circle"], index=0)
-    color_hex = st.color_picker("Color", value="#00FF00")
+    color_hex = st.color_picker("Color", value="#FF8C00")
     color_bgr = hex_to_bgr(color_hex)
     thickness = st.slider("Thickness", min_value=1, max_value=10, value=2)
 
