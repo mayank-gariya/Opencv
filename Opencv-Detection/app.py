@@ -43,7 +43,6 @@ def load_image_from_upload(uploaded_file) -> np.ndarray:
     if uploaded_file is None:
         return None
     img = Image.open(uploaded_file)
-    # Convert PIL to RGB, then to BGR for OpenCV
     img_rgb = np.array(img.convert("RGB"))
     return cv.cvtColor(img_rgb, cv.COLOR_RGB2BGR)
 
@@ -52,8 +51,8 @@ def get_image_from_camera(camera_input) -> np.ndarray:
     """Convert camera input to BGR numpy array."""
     if camera_input is None:
         return None
-    bytes_data = camera_input.getvalue()
-    img = Image.open(bytes_data)
+    # camera_input is already a BytesIO-like object – use directly
+    img = Image.open(camera_input)
     img_rgb = np.array(img.convert("RGB"))
     return cv.cvtColor(img_rgb, cv.COLOR_RGB2BGR)
 
@@ -67,10 +66,7 @@ def process_image(
     if img is None:
         return None
 
-    # Convert to grayscale for detection
     gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-
-    # Detect objects
     rects = detector.detect(
         gray,
         scaleFactor=params["scale"],
@@ -78,7 +74,6 @@ def process_image(
         minSize=params["min_size"]
     )
 
-    # Draw shapes
     shape = params["shape"]
     color = params["color_bgr"]
     thickness = params["thickness"]
@@ -88,7 +83,6 @@ def process_image(
     elif shape == "Circle":
         img = draw_circles(img, rects, color, thickness)
 
-    # Draw text
     if params["text"]:
         img = put_text(
             img,
@@ -106,7 +100,6 @@ def process_image(
 with st.sidebar:
     st.title("🎛️ Controls")
 
-    # --- Source Selection ---
     st.subheader("Input Source")
     source = st.radio(
         "Choose source",
@@ -115,7 +108,6 @@ with st.sidebar:
     )
     st.divider()
 
-    # --- Cascade Selection ---
     cascade_files = list(CASCADE_DIR.glob("*.xml"))
     if not cascade_files:
         st.warning("No cascade XML files found in 'cascade/' folder.")
@@ -141,7 +133,6 @@ with st.sidebar:
 
     st.divider()
 
-    # --- Detection Parameters ---
     st.subheader("Detection Settings")
     scale_factor = st.slider(
         "Scale Factor",
@@ -165,7 +156,6 @@ with st.sidebar:
 
     st.divider()
 
-    # --- Drawing Controls ---
     st.subheader("Drawing Options")
     shape = st.selectbox("Shape", ["None", "Rectangle", "Circle"], index=0)
     color_hex = st.color_picker("Color", value="#00FF00")
@@ -178,7 +168,6 @@ with st.sidebar:
     text_pos_y = st.slider("Text Y", min_value=0, max_value=500, value=30)
     text_pos = (text_pos_x, text_pos_y)
 
-    # Assemble parameters
     detection_params = {
         "scale": scale_factor,
         "neighbors": min_neighbors,
@@ -199,7 +188,6 @@ with st.sidebar:
 st.header("🎯 Detection Dashboard")
 st.info("Upload or capture an image/video and apply cascade detection with custom overlays.")
 
-# --- Source Handling ---
 img_original = None
 img_processed = None
 
@@ -228,13 +216,11 @@ else:  # Video
         key="video_upload"
     )
     if uploaded_video:
-        # Save to temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
             tmp.write(uploaded_video.read())
             video_path = tmp.name
         st.session_state.video_path = video_path
 
-        # Get total frames
         cap = cv.VideoCapture(video_path)
         total_frames = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
         st.session_state.total_frames = total_frames
@@ -261,16 +247,12 @@ else:  # Video
         st.info("🎬 Upload a video file to begin.")
 
 
-# --- Process and Display ---
 if img_original is not None:
     if detector is not None:
-        # Process the image
         img_processed = process_image(img_original, detector, detection_params)
-        # Convert BGR to RGB for display
         img_display = cv.cvtColor(img_processed, cv.COLOR_BGR2RGB)
         st.image(img_display, use_container_width=True, caption="Processed Output")
     else:
-        # If no detector, show original
         img_display = cv.cvtColor(img_original, cv.COLOR_BGR2RGB)
         st.image(img_display, use_container_width=True, caption="Original (no detector)")
 else:
