@@ -93,6 +93,7 @@ def process_image(
         )
 
     return img
+    
 def process_video(
     input_path: str,
     detector: CascadeDetector,
@@ -339,9 +340,6 @@ else:  # Video
         )
     else:
         st.info("📤 Please upload a video.")
-```
-
-
 
 if img_original is not None:
     if detector is not None:
