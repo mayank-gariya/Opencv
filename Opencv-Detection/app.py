@@ -271,7 +271,6 @@ elif source == "Camera":
     else:
         st.info("📸 Click the camera button to capture an image.")
 
-```python
 else:  # Video
 
     uploaded_video = st.file_uploader(
