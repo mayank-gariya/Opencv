@@ -23,8 +23,8 @@ BASE_DIR = pathlib.Path(__file__).parent
 CASCADE_DIR = BASE_DIR / "cascade"
 
 # ---------- SESSION STATE ----------
-if "live_running" not in st.session_state:
-    st.session_state.live_running = False
+if "camera_index" not in st.session_state:
+    st.session_state.camera_index = 0
 
 # ---------- HELPER FUNCTIONS ----------
 def hex_to_bgr(hex_color: str) -> tuple:
@@ -68,13 +68,35 @@ def process_image(img: np.ndarray, detector: CascadeDetector, params: dict) -> n
                        params["font_scale"], color, thickness)
     return img
 
+def get_available_camera(max_tries=5):
+    """
+    Try to find a working camera by testing indices 0..max_tries-1.
+    Returns (index, capture_object) or (None, None) if none work.
+    """
+    # On Windows, using DirectShow can be more reliable.
+    backends = [cv.CAP_ANY]
+    if cv.__version__.startswith("4.") and hasattr(cv, "CAP_DSHOW"):
+        backends.insert(0, cv.CAP_DSHOW)
+
+    for backend in backends:
+        for i in range(max_tries):
+            cap = cv.VideoCapture(i, backend)
+            if cap.isOpened():
+                # Test read a frame to be sure
+                ret, frame = cap.read()
+                if ret and frame is not None:
+                    cap.release()
+                    return i, cv.VideoCapture(i, backend)
+                cap.release()
+    return None, None
+
 # ---------- SIDEBAR CONTROLS ----------
 with st.sidebar:
     st.title("🎛️ Controls")
     st.subheader("Input Source")
     source = st.radio(
         "Choose source",
-        ["Image", "Camera", "Live Webcam (OpenCV)"],   # removed Video
+        ["Image", "Camera", "Live Webcam (OpenCV)"],
         index=0
     )
     st.divider()
@@ -163,42 +185,86 @@ elif source == "Camera":
 
 elif source == "Live Webcam (OpenCV)":
     st.subheader("📹 Live Webcam Feed (OpenCV)")
-    st.warning(
-        "⚠️ This loop will block the UI. Press **Stop** in the browser or interrupt the kernel to exit."
-    )
 
-    # OpenCV capture
-    cap = cv.VideoCapture(0)
-    if not cap.isOpened():
-        st.error("Could not open webcam. Please check your camera connection.")
+    # Camera selection / retry
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        # Let user manually choose camera index if auto detection fails
+        selected_index = st.number_input(
+            "Camera Index (try 0,1,2,...)",
+            min_value=-1,
+            max_value=10,
+            value=st.session_state.camera_index,
+            step=1,
+            key="camera_index_input"
+        )
+        st.session_state.camera_index = selected_index
+    with col2:
+        retry = st.button("🔄 Retry Camera")
+
+    # Try to open the camera
+    cap = None
+    if selected_index >= 0:
+        # Use the user's selected index
+        cap = cv.VideoCapture(selected_index)
+        if not cap.isOpened():
+            st.error(f"Could not open camera at index {selected_index}.")
+            # Try auto-detection as fallback
+            auto_idx, auto_cap = get_available_camera()
+            if auto_cap is not None:
+                st.info(f"Auto-detected working camera at index {auto_idx}. Using that instead.")
+                cap = auto_cap
+            else:
+                st.error("No working camera found. Please check your camera connection and permissions.")
+                cap = None
     else:
-        # Placeholder for the image
+        # Auto-detect
+        auto_idx, auto_cap = get_available_camera()
+        if auto_cap is not None:
+            st.success(f"Auto-detected camera at index {auto_idx}.")
+            cap = auto_cap
+            st.session_state.camera_index = auto_idx
+        else:
+            st.error("Could not auto-detect any camera. Please check your camera connection.")
+            cap = None
+
+    if cap is not None and cap.isOpened():
         placeholder = st.empty()
-        stop_button = st.button("Stop Live Feed")
-        # We'll run the loop until the stop button is clicked (but the button won't be responsive)
-        # So we check a session state variable that can be set by the button.
-        # However, the button click will only be processed after the loop ends.
-        # So we'll use a simple countdown to auto-stop after 300 frames or use a keyboard interrupt.
-        # This is exactly how a normal OpenCV script behaves.
+        # Display stop info
+        st.warning("⚠️ This loop will block the UI. Press **Stop** in the browser or interrupt the kernel to exit.")
+        st.info("The feed will auto-stop after 500 frames to prevent freezing.")
+
         frame_count = 0
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            # Process frame
-            processed = process_image(frame, detector, detection_params)
-            # Convert to RGB for display
-            rgb = cv.cvtColor(processed, cv.COLOR_BGR2RGB)
-            placeholder.image(rgb, channels="RGB", use_container_width=True)
-            frame_count += 1
-            # Auto-stop after 500 frames to prevent infinite loop (optional)
-            if frame_count > 500:
-                st.info("Auto-stopped after 500 frames to keep the app responsive.")
-                break
-            # Small delay to control frame rate
-            time.sleep(0.03)
-        cap.release()
-        st.info("Webcam released. Click 'Rerun' in the top-right to restart the app.")
+        try:
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    st.error("Camera disconnected or frame read failed.")
+                    break
+                # Process frame
+                processed = process_image(frame, detector, detection_params)
+                # Convert to RGB for display
+                rgb = cv.cvtColor(processed, cv.COLOR_BGR2RGB)
+                placeholder.image(rgb, channels="RGB", use_container_width=True)
+                frame_count += 1
+                if frame_count > 500:
+                    st.info("Auto-stopped after 500 frames. You can restart the app (Rerun in top-right).")
+                    break
+                time.sleep(0.03)
+        except KeyboardInterrupt:
+            st.info("Interrupted by user.")
+        finally:
+            cap.release()
+            st.info("Webcam released.")
+    else:
+        st.error("Could not open webcam. Please check your camera connection and permissions.")
+        st.markdown("""
+        **Troubleshooting:**
+        - On Linux, ensure you are in the `video` group: `sudo usermod -a -G video $USER` (then logout/login).
+        - On Windows, try changing the camera index to `0`, `1`, or `-1`.
+        - Make sure no other application (like Zoom) is using the camera.
+        - Try using a different USB port.
+        """)
 
 # ---------- Display processed image for Image/Camera ----------
 if source in ["Image", "Camera"] and img_original is not None:
