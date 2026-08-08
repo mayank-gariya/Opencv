@@ -93,44 +93,51 @@ def process_image(
         )
 
     return img
-    
 def process_video(
     input_path: str,
     detector: CascadeDetector,
     params: dict
 ) -> str:
     """
-    Process an entire video using OpenCV and return
-    the path of the processed video.
+    Process the complete video frame-by-frame using OpenCV,
+    then convert the result to browser-compatible H.264 MP4.
     """
 
     cap = cv.VideoCapture(input_path)
 
     if not cap.isOpened():
-        raise ValueError("Could not open video.")
+        raise ValueError("Could not open input video.")
 
-    # Get video properties
+    # -----------------------------
+    # Read video properties
+    # -----------------------------
     fps = cap.get(cv.CAP_PROP_FPS)
     width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
 
-    # Fallback FPS if OpenCV cannot detect it
     if fps <= 0:
         fps = 30.0
 
-    # Create temporary output video
-    output_file = tempfile.NamedTemporaryFile(
+    if width <= 0 or height <= 0:
+        cap.release()
+        raise ValueError("Invalid video dimensions.")
+
+    # -----------------------------
+    # Temporary OpenCV output
+    # -----------------------------
+    raw_output = tempfile.NamedTemporaryFile(
         delete=False,
         suffix=".mp4"
     )
-    output_path = output_file.name
-    output_file.close()
 
-    # MP4 codec
+    raw_output_path = raw_output.name
+    raw_output.close()
+
+    # OpenCV writes this intermediate file
     fourcc = cv.VideoWriter_fourcc(*"mp4v")
 
     writer = cv.VideoWriter(
-        output_path,
+        raw_output_path,
         fourcc,
         fps,
         (width, height)
@@ -138,8 +145,11 @@ def process_video(
 
     if not writer.isOpened():
         cap.release()
-        raise ValueError("Could not create output video.")
+        raise ValueError("Could not create temporary video.")
 
+    # -----------------------------
+    # Process frames
+    # -----------------------------
     while True:
 
         ret, frame = cap.read()
@@ -153,11 +163,72 @@ def process_video(
             params
         )
 
-        writer.write(processed_frame)
+        if processed_frame is not None:
+            writer.write(processed_frame)
+
     cap.release()
     writer.release()
 
-    return output_path
+    # -----------------------------
+    # Convert to browser-compatible
+    # H.264 MP4
+    # -----------------------------
+    final_output = tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=".mp4"
+    )
+
+    final_output_path = final_output.name
+    final_output.close()
+
+    ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+
+    command = [
+        ffmpeg_path,
+
+        "-y",
+
+        "-i",
+        raw_output_path,
+
+        # Video codec
+        "-c:v",
+        "libx264",
+
+        # Browser-friendly pixel format
+        "-pix_fmt",
+        "yuv420p",
+
+        # Audio
+        "-c:a",
+        "aac",
+
+        # Fast start for web playback
+        "-movflags",
+        "+faststart",
+
+        final_output_path
+    ]
+
+    result = subprocess.run(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+
+    # Remove intermediate OpenCV video
+    try:
+        os.remove(raw_output_path)
+    except OSError:
+        pass
+
+    if result.returncode != 0:
+        raise ValueError(
+            f"FFmpeg conversion failed:\n{result.stderr}"
+        )
+
+    return final_output_path
 
 # ---------- SIDEBAR CONTROLS ----------
 with st.sidebar:
@@ -282,63 +353,107 @@ else:  # Video
 
     if uploaded_video:
 
-        # Save uploaded video temporarily
-        with tempfile.NamedTemporaryFile(
-            delete=False,
-            suffix=".mp4"
-        ) as tmp:
+        # --------------------------------
+        # Read uploaded video
+        # --------------------------------
+        video_bytes = uploaded_video.getvalue()
 
-            tmp.write(uploaded_video.read())
-            input_video_path = tmp.name
+        # --------------------------------
+        # Create a unique ID for video
+        # --------------------------------
+        import hashlib
 
-        # Store input path
-        st.session_state.video_path = input_video_path
+        video_hash = hashlib.md5(video_bytes).hexdigest()
 
-        if detector is not None:
-            with st.spinner("🔍 Processing video..."):
-                try:
-                    output_video_path = process_video(
-                        input_video_path,
-                        detector,
-                        detection_params
-                    )
-                    st.session_state.processed_video_path = (
-                        output_video_path
-                    )
-                except Exception as e:
-                    st.error(
-                        f"Failed to process video: {e}"
-                    )
-        else:
-            st.warning(
-                "Please select a valid cascade classifier."
-            )
+        # --------------------------------
+        # Process only when a new video
+        # is uploaded
+        # --------------------------------
+        if (
+            st.session_state.get("video_hash") != video_hash
+            or st.session_state.get("processed_video_path") is None
+        ):
 
+            # Save uploaded video
+            with tempfile.NamedTemporaryFile(
+                delete=False,
+                suffix=".mp4"
+            ) as tmp:
+
+                tmp.write(video_bytes)
+                input_video_path = tmp.name
+
+            st.session_state.video_path = input_video_path
+            st.session_state.video_hash = video_hash
+            st.session_state.processed_video_path = None
+
+            # --------------------------------
+            # Process video
+            # --------------------------------
+            if detector is not None:
+
+                with st.spinner(
+                    "🔍 Processing video frame-by-frame..."
+                ):
+
+                    try:
+
+                        output_video_path = process_video(
+                            input_video_path,
+                            detector,
+                            detection_params
+                        )
+
+                        st.session_state.processed_video_path = (
+                            output_video_path
+                        )
+
+                    except Exception as e:
+
+                        st.error(
+                            f"Failed to process video: {e}"
+                        )
+
+            else:
+
+                st.warning(
+                    "Please select a valid cascade classifier."
+                )
+
+    # --------------------------------
+    # Display processed video
+    # --------------------------------
     if (
-        "processed_video_path" in st.session_state
-        and st.session_state.processed_video_path
+        st.session_state.get("processed_video_path")
         and os.path.exists(
             st.session_state.processed_video_path
         )
     ):
+
         st.subheader("🎯 Processed Video")
+
         st.video(
             st.session_state.processed_video_path
         )
 
+    # --------------------------------
+    # Display original video
+    # --------------------------------
     elif (
-        "video_path" in st.session_state
-        and st.session_state.video_path
+        st.session_state.get("video_path")
         and os.path.exists(
             st.session_state.video_path
         )
     ):
 
         st.subheader("🎥 Original Video")
+
         st.video(
             st.session_state.video_path
         )
+
     else:
+
         st.info("📤 Please upload a video.")
 
 if img_original is not None:
