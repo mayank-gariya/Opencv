@@ -26,9 +26,9 @@ CASCADE_DIR = BASE_DIR / "cascade"
 # ---------- SESSION STATE INIT ----------
 if "video_path" not in st.session_state:
     st.session_state.video_path = None
-if "total_frames" not in st.session_state:
-    st.session_state.total_frames = 0
 
+if "processed_video_path" not in st.session_state:
+    st.session_state.processed_video_path = None
 
 # ---------- HELPER FUNCTIONS ----------
 def hex_to_bgr(hex_color: str) -> tuple:
@@ -93,7 +93,70 @@ def process_image(
         )
 
     return img
+def process_video(
+    input_path: str,
+    detector: CascadeDetector,
+    params: dict
+) -> str:
+    """
+    Process an entire video using OpenCV and return
+    the path of the processed video.
+    """
 
+    cap = cv.VideoCapture(input_path)
+
+    if not cap.isOpened():
+        raise ValueError("Could not open video.")
+
+    # Get video properties
+    fps = cap.get(cv.CAP_PROP_FPS)
+    width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
+
+    # Fallback FPS if OpenCV cannot detect it
+    if fps <= 0:
+        fps = 30.0
+
+    # Create temporary output video
+    output_file = tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=".mp4"
+    )
+    output_path = output_file.name
+    output_file.close()
+
+    # MP4 codec
+    fourcc = cv.VideoWriter_fourcc(*"mp4v")
+
+    writer = cv.VideoWriter(
+        output_path,
+        fourcc,
+        fps,
+        (width, height)
+    )
+
+    if not writer.isOpened():
+        cap.release()
+        raise ValueError("Could not create output video.")
+
+    while True:
+
+        ret, frame = cap.read()
+
+        if not ret:
+            break
+
+        processed_frame = process_image(
+            frame,
+            detector,
+            params
+        )
+
+        writer.write(processed_frame)
+    cap.release()
+    writer.release()
+
+    return output_path
 
 # ---------- SIDEBAR CONTROLS ----------
 with st.sidebar:
@@ -208,42 +271,77 @@ elif source == "Camera":
     else:
         st.info("📸 Click the camera button to capture an image.")
 
+```python
 else:  # Video
+
     uploaded_video = st.file_uploader(
         "Upload a video",
         type=["mp4", "avi", "mov", "mkv"],
         key="video_upload"
     )
+
     if uploaded_video:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
+
+        # Save uploaded video temporarily
+        with tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix=".mp4"
+        ) as tmp:
+
             tmp.write(uploaded_video.read())
-            video_path = tmp.name
-        st.session_state.video_path = video_path
+            input_video_path = tmp.name
 
-        cap = cv.VideoCapture(video_path)
-        total_frames = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
-        st.session_state.total_frames = total_frames
-        cap.release()
+        # Store input path
+        st.session_state.video_path = input_video_path
 
-    if st.session_state.video_path and os.path.exists(st.session_state.video_path):
-        total_frames = st.session_state.total_frames
-        frame_idx = st.slider(
-            "Select Frame",
-            min_value=0,
-            max_value=total_frames - 1 if total_frames > 0 else 0,
-            value=0,
-            step=1
-        )
-        cap = cv.VideoCapture(st.session_state.video_path)
-        cap.set(cv.CAP_PROP_POS_FRAMES, frame_idx)
-        ret, frame = cap.read()
-        cap.release()
-        if ret:
-            img_original = frame
+        if detector is not None:
+            with st.spinner("🔍 Processing video..."):
+                try:
+                    output_video_path = process_video(
+                        input_video_path,
+                        detector,
+                        detection_params
+                    )
+                    st.session_state.processed_video_path = (
+                        output_video_path
+                    )
+                except Exception as e:
+                    st.error(
+                        f"Failed to process video: {e}"
+                    )
         else:
-            st.warning("Could not read frame.")
+            st.warning(
+                "Please select a valid cascade classifier."
+            )
+
+    if (
+        "processed_video_path" in st.session_state
+        and st.session_state.processed_video_path
+        and os.path.exists(
+            st.session_state.processed_video_path
+        )
+    ):
+        st.subheader("🎯 Processed Video")
+        st.video(
+            st.session_state.processed_video_path
+        )
+
+    elif (
+        "video_path" in st.session_state
+        and st.session_state.video_path
+        and os.path.exists(
+            st.session_state.video_path
+        )
+    ):
+
+        st.subheader("🎥 Original Video")
+        st.video(
+            st.session_state.video_path
+        )
     else:
-        st.info("🎬 Upload a video file to begin.")
+        st.info("📤 Please upload a video.")
+```
+
 
 
 if img_original is not None:
