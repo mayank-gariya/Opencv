@@ -8,11 +8,6 @@ import os
 from modules.detector import CascadeDetector
 from modules.processor import draw_rectangles, draw_circles, put_text
 from css import load_css
-import imageio_ffmpeg
-import subprocess
-import hashlib
-
-# ---------- WebRTC imports ----------
 from streamlit_webrtc import webrtc_streamer, VideoTransformerBase, WebRtcMode
 
 # ---------- PAGE CONFIG ----------
@@ -29,18 +24,13 @@ load_css()
 BASE_DIR = pathlib.Path(__file__).parent
 CASCADE_DIR = BASE_DIR / "cascade"
 
-# ---------- SESSION STATE INIT ----------
-if "video_path" not in st.session_state:
-    st.session_state.video_path = None
-if "processed_video_path" not in st.session_state:
-    st.session_state.processed_video_path = None
-# For live webcam, we store the current detector and params
+# ---------- SESSION STATE ----------
 if "live_detector" not in st.session_state:
     st.session_state.live_detector = None
 if "live_params" not in st.session_state:
     st.session_state.live_params = {}
 
-# ---------- HELPER FUNCTIONS (unchanged) ----------
+# ---------- HELPER FUNCTIONS ----------
 def hex_to_bgr(hex_color: str) -> tuple:
     hex_color = hex_color.lstrip("#")
     r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
@@ -82,17 +72,10 @@ def process_image(img: np.ndarray, detector: CascadeDetector, params: dict) -> n
                        params["font_scale"], color, thickness)
     return img
 
-def process_video(input_path: str, detector: CascadeDetector, params: dict) -> str:
-    # ... (your existing function, unchanged) ...
-    # (I'm omitting the full function here for brevity, but keep it as in your original)
-    # Make sure it's present in your actual code.
-    pass  # Placeholder – you must copy your original process_video here
-
-# ---------- LIVE WEBCAM TRANSFORMER (reads from session_state) ----------
+# ---------- LIVE WEBCAM TRANSFORMER ----------
 class LiveVideoTransformer(VideoTransformerBase):
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
-        # Get the most current detector and params from session_state
         detector = st.session_state.get("live_detector")
         params = st.session_state.get("live_params", {})
         try:
@@ -101,7 +84,6 @@ class LiveVideoTransformer(VideoTransformerBase):
             else:
                 processed = img
         except Exception as e:
-            # If anything fails, return original frame to avoid crashing
             st.warning(f"Live processing error: {e}")
             processed = img
         return processed
@@ -112,7 +94,7 @@ with st.sidebar:
     st.subheader("Input Source")
     source = st.radio(
         "Choose source",
-        ["Image", "Camera", "Video", "Live Webcam"],
+        ["Image", "Camera", "Live Webcam"],   # Video removed
         index=0
     )
     st.divider()
@@ -140,7 +122,6 @@ with st.sidebar:
     else:
         detector = None
 
-    # Update session_state for live webcam
     st.session_state.live_detector = detector
 
     st.divider()
@@ -177,7 +158,6 @@ with st.sidebar:
         "font_scale": font_scale,
         "text_pos": text_pos,
     }
-    # Update session_state for live webcam
     st.session_state.live_params = detection_params
 
     st.divider()
@@ -185,7 +165,7 @@ with st.sidebar:
 
 # ---------- MAIN AREA ----------
 st.header("🎯 Detection Dashboard")
-st.info("Upload or capture an image/video and apply cascade detection with custom overlays.")
+st.info("Upload or capture an image, or use live webcam with cascade detection.")
 
 img_original = None
 img_processed = None
@@ -204,48 +184,14 @@ elif source == "Camera":
     else:
         st.info("📸 Click the camera button to capture an image.")
 
-elif source == "Video":
-    uploaded_video = st.file_uploader("Upload a video", type=["mp4", "avi", "mov", "mkv"], key="video_upload")
-    if uploaded_video:
-        video_bytes = uploaded_video.getvalue()
-        video_hash = hashlib.md5(video_bytes).hexdigest()
-        if (st.session_state.get("video_hash") != video_hash or
-            st.session_state.get("processed_video_path") is None):
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
-                tmp.write(video_bytes)
-                input_video_path = tmp.name
-            st.session_state.video_path = input_video_path
-            st.session_state.video_hash = video_hash
-            st.session_state.processed_video_path = None
-            if detector is not None:
-                with st.spinner("🔍 Processing video frame-by-frame..."):
-                    try:
-                        output_video_path = process_video(input_video_path, detector, detection_params)
-                        st.session_state.processed_video_path = output_video_path
-                    except Exception as e:
-                        st.error(f"Failed to process video: {e}")
-            else:
-                st.warning("Please select a valid cascade classifier.")
-    if (st.session_state.get("processed_video_path") and
-        os.path.exists(st.session_state.processed_video_path)):
-        st.subheader("🎯 Processed Video")
-        st.video(st.session_state.processed_video_path)
-    elif (st.session_state.get("video_path") and
-          os.path.exists(st.session_state.video_path)):
-        st.subheader("🎥 Original Video")
-        st.video(st.session_state.video_path)
-    else:
-        st.info("📤 Please upload a video.")
-
 elif source == "Live Webcam":
     st.subheader("📹 Live Webcam Feed")
-    # The transformer will use the latest detector and params from session_state
     webrtc_streamer(
         key="live-webcam",
         mode=WebRtcMode.SENDRECV,
         video_transformer_factory=LiveVideoTransformer,
         media_stream_constraints={"video": True, "audio": False},
-        async_processing=False,   # simpler threading
+        async_processing=False,
     )
 
 # ---------- Display processed image for Image/Camera ----------
