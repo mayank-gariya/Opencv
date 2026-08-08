@@ -30,14 +30,6 @@ Live demo: https://opencv-uitqdgpaljq7fnzdsfudcg.streamlit.app/
 - NumPy
 - Pillow
 
-Badges (clickable):
-
-- [Python](https://www.python.org/): ![Python](https://img.shields.io/badge/python-3.8%2B-blue?logo=python&logoColor=white)
-- [OpenCV](https://opencv.org/): ![OpenCV](https://img.shields.io/badge/opencv-4.9.0-blue?logo=opencv&logoColor=white)
-- [Streamlit](https://streamlit.io/): ![Streamlit](https://img.shields.io/badge/streamlit-1.35.0-orange?logo=streamlit&logoColor=white)
-- [NumPy](https://numpy.org/): ![NumPy](https://img.shields.io/badge/numpy-1.26-informational?logo=numpy&logoColor=white)
-- [Pillow](https://python-pillow.org/): ![Pillow](https://img.shields.io/badge/pillow-10.0.0-lightgrey?logo=python&logoColor=white)
-
 ---
 
 ## Installation
@@ -92,12 +84,9 @@ A deployed live demo is available here:
 
 https://opencv-uitqdgpaljq7fnzdsfudcg.streamlit.app/
 
-Placeholders for demo screenshots (replace with your images):
-
-- ![Live Demo - Webcam](docs/demo-webcam.png)
-- ![Live Demo - Upload Image](docs/demo-upload.png)
-
-Replace the above image files in `docs/` (create the folder if it doesn't exist) and update their filenames if necessary.
+<img width="1823" height="808" alt="image" src="https://github.com/user-attachments/assets/c015bc3c-b68d-40af-b251-021ce604949c" />
+<img width="1876" height="821" alt="image" src="https://github.com/user-attachments/assets/5c65bc3f-d624-4b39-a961-b2ddeb3d97dc" />
+<img width="1907" height="857" alt="image" src="https://github.com/user-attachments/assets/ec9113bb-8002-4724-a971-381f12b99152" />
 
 ---
 
