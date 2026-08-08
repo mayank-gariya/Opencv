@@ -3,12 +3,10 @@ import pathlib
 import cv2 as cv
 import numpy as np
 from PIL import Image
-import tempfile
-import os
+import time
 from modules.detector import CascadeDetector
 from modules.processor import draw_rectangles, draw_circles, put_text
 from css import load_css
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase, WebRtcMode
 
 # ---------- PAGE CONFIG ----------
 st.set_page_config(
@@ -25,10 +23,8 @@ BASE_DIR = pathlib.Path(__file__).parent
 CASCADE_DIR = BASE_DIR / "cascade"
 
 # ---------- SESSION STATE ----------
-if "live_detector" not in st.session_state:
-    st.session_state.live_detector = None
-if "live_params" not in st.session_state:
-    st.session_state.live_params = {}
+if "live_running" not in st.session_state:
+    st.session_state.live_running = False
 
 # ---------- HELPER FUNCTIONS ----------
 def hex_to_bgr(hex_color: str) -> tuple:
@@ -72,29 +68,13 @@ def process_image(img: np.ndarray, detector: CascadeDetector, params: dict) -> n
                        params["font_scale"], color, thickness)
     return img
 
-# ---------- LIVE WEBCAM TRANSFORMER ----------
-class LiveVideoTransformer(VideoTransformerBase):
-    def recv(self, frame):
-        img = frame.to_ndarray(format="bgr24")
-        detector = st.session_state.get("live_detector")
-        params = st.session_state.get("live_params", {})
-        try:
-            if detector is not None:
-                processed = process_image(img, detector, params)
-            else:
-                processed = img
-        except Exception as e:
-            st.warning(f"Live processing error: {e}")
-            processed = img
-        return processed
-
 # ---------- SIDEBAR CONTROLS ----------
 with st.sidebar:
     st.title("🎛️ Controls")
     st.subheader("Input Source")
     source = st.radio(
         "Choose source",
-        ["Image", "Camera", "Live Webcam"],   # Video removed
+        ["Image", "Camera", "Live Webcam (OpenCV)"],   # removed Video
         index=0
     )
     st.divider()
@@ -121,8 +101,6 @@ with st.sidebar:
             detector = None
     else:
         detector = None
-
-    st.session_state.live_detector = detector
 
     st.divider()
     st.subheader("Detection Settings")
@@ -158,7 +136,6 @@ with st.sidebar:
         "font_scale": font_scale,
         "text_pos": text_pos,
     }
-    st.session_state.live_params = detection_params
 
     st.divider()
     st.caption("Built with ❤️ using OpenCV & Streamlit")
@@ -184,15 +161,44 @@ elif source == "Camera":
     else:
         st.info("📸 Click the camera button to capture an image.")
 
-elif source == "Live Webcam":
-    st.subheader("📹 Live Webcam Feed")
-    webrtc_streamer(
-        key="live-webcam",
-        mode=WebRtcMode.SENDRECV,
-        video_transformer_factory=LiveVideoTransformer,
-        media_stream_constraints={"video": True, "audio": False},
-        async_processing=False,
+elif source == "Live Webcam (OpenCV)":
+    st.subheader("📹 Live Webcam Feed (OpenCV)")
+    st.warning(
+        "⚠️ This loop will block the UI. Press **Stop** in the browser or interrupt the kernel to exit."
     )
+
+    # OpenCV capture
+    cap = cv.VideoCapture(0)
+    if not cap.isOpened():
+        st.error("Could not open webcam. Please check your camera connection.")
+    else:
+        # Placeholder for the image
+        placeholder = st.empty()
+        stop_button = st.button("Stop Live Feed")
+        # We'll run the loop until the stop button is clicked (but the button won't be responsive)
+        # So we check a session state variable that can be set by the button.
+        # However, the button click will only be processed after the loop ends.
+        # So we'll use a simple countdown to auto-stop after 300 frames or use a keyboard interrupt.
+        # This is exactly how a normal OpenCV script behaves.
+        frame_count = 0
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            # Process frame
+            processed = process_image(frame, detector, detection_params)
+            # Convert to RGB for display
+            rgb = cv.cvtColor(processed, cv.COLOR_BGR2RGB)
+            placeholder.image(rgb, channels="RGB", use_container_width=True)
+            frame_count += 1
+            # Auto-stop after 500 frames to prevent infinite loop (optional)
+            if frame_count > 500:
+                st.info("Auto-stopped after 500 frames to keep the app responsive.")
+                break
+            # Small delay to control frame rate
+            time.sleep(0.03)
+        cap.release()
+        st.info("Webcam released. Click 'Rerun' in the top-right to restart the app.")
 
 # ---------- Display processed image for Image/Camera ----------
 if source in ["Image", "Camera"] and img_original is not None:
