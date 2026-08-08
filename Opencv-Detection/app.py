@@ -8,6 +8,7 @@ import os
 from modules.detector import CascadeDetector
 from modules.processor import draw_rectangles, draw_circles, put_text
 from css import load_css
+import imageio_ffmpeg
 
 # ---------- PAGE CONFIG ----------
 st.set_page_config(
