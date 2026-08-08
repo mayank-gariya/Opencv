@@ -9,6 +9,11 @@ from modules.detector import CascadeDetector
 from modules.processor import draw_rectangles, draw_circles, put_text
 from css import load_css
 import imageio_ffmpeg
+import subprocess
+import hashlib
+
+# ---------- NEW: streamlit-webrtc imports ----------
+from streamlit_webrtc import webrtc_streamer, VideoTransformerBase, WebRtcMode
 
 # ---------- PAGE CONFIG ----------
 st.set_page_config(
@@ -94,6 +99,8 @@ def process_image(
         )
 
     return img
+
+
 def process_video(
     input_path: str,
     detector: CascadeDetector,
@@ -231,6 +238,25 @@ def process_video(
 
     return final_output_path
 
+
+# ---------- NEW: Live video transformer ----------
+class LiveVideoTransformer(VideoTransformerBase):
+    def __init__(self, detector, params):
+        self.detector = detector
+        self.params = params
+
+    def recv(self, frame):
+        # Convert incoming frame to BGR (OpenCV format)
+        img = frame.to_ndarray(format="bgr24")
+
+        if self.detector is not None:
+            processed = process_image(img, self.detector, self.params)
+        else:
+            processed = img
+
+        return processed
+
+
 # ---------- SIDEBAR CONTROLS ----------
 with st.sidebar:
     st.title("🎛️ Controls")
@@ -238,7 +264,7 @@ with st.sidebar:
     st.subheader("Input Source")
     source = st.radio(
         "Choose source",
-        ["Image", "Camera", "Video"],
+        ["Image", "Camera", "Video", "Live Webcam"],   # <-- added "Live Webcam"
         index=0
     )
     st.divider()
@@ -326,6 +352,7 @@ st.info("Upload or capture an image/video and apply cascade detection with custo
 img_original = None
 img_processed = None
 
+# ---------- IMAGE / CAMERA / VIDEO (unchanged) ----------
 if source == "Image":
     uploaded_file = st.file_uploader(
         "Upload an image",
@@ -344,8 +371,7 @@ elif source == "Camera":
     else:
         st.info("📸 Click the camera button to capture an image.")
 
-else:  # Video
-
+elif source == "Video":  # Video
     uploaded_video = st.file_uploader(
         "Upload a video",
         type=["mp4", "avi", "mov", "mkv"],
@@ -353,34 +379,17 @@ else:  # Video
     )
 
     if uploaded_video:
-
-        # --------------------------------
-        # Read uploaded video
-        # --------------------------------
         video_bytes = uploaded_video.getvalue()
-
-        # --------------------------------
-        # Create a unique ID for video
-        # --------------------------------
-        import hashlib
-
         video_hash = hashlib.md5(video_bytes).hexdigest()
 
-        # --------------------------------
-        # Process only when a new video
-        # is uploaded
-        # --------------------------------
         if (
             st.session_state.get("video_hash") != video_hash
             or st.session_state.get("processed_video_path") is None
         ):
-
-            # Save uploaded video
             with tempfile.NamedTemporaryFile(
                 delete=False,
                 suffix=".mp4"
             ) as tmp:
-
                 tmp.write(video_bytes)
                 input_video_path = tmp.name
 
@@ -388,76 +397,53 @@ else:  # Video
             st.session_state.video_hash = video_hash
             st.session_state.processed_video_path = None
 
-            # --------------------------------
-            # Process video
-            # --------------------------------
             if detector is not None:
-
-                with st.spinner(
-                    "🔍 Processing video frame-by-frame..."
-                ):
-
+                with st.spinner("🔍 Processing video frame-by-frame..."):
                     try:
-
                         output_video_path = process_video(
                             input_video_path,
                             detector,
                             detection_params
                         )
-
-                        st.session_state.processed_video_path = (
-                            output_video_path
-                        )
-
+                        st.session_state.processed_video_path = output_video_path
                     except Exception as e:
-
-                        st.error(
-                            f"Failed to process video: {e}"
-                        )
-
+                        st.error(f"Failed to process video: {e}")
             else:
+                st.warning("Please select a valid cascade classifier.")
 
-                st.warning(
-                    "Please select a valid cascade classifier."
-                )
-
-    # --------------------------------
-    # Display processed video
-    # --------------------------------
     if (
         st.session_state.get("processed_video_path")
-        and os.path.exists(
-            st.session_state.processed_video_path
-        )
+        and os.path.exists(st.session_state.processed_video_path)
     ):
-
         st.subheader("🎯 Processed Video")
+        st.video(st.session_state.processed_video_path)
 
-        st.video(
-            st.session_state.processed_video_path
-        )
-
-    # --------------------------------
-    # Display original video
-    # --------------------------------
     elif (
         st.session_state.get("video_path")
-        and os.path.exists(
-            st.session_state.video_path
-        )
+        and os.path.exists(st.session_state.video_path)
     ):
-
         st.subheader("🎥 Original Video")
-
-        st.video(
-            st.session_state.video_path
-        )
+        st.video(st.session_state.video_path)
 
     else:
-
         st.info("📤 Please upload a video.")
 
-if img_original is not None:
+# ---------- NEW: Live Webcam ----------
+elif source == "Live Webcam":
+    st.subheader("📹 Live Webcam Feed")
+
+    if detector is None:
+        st.warning("Please select a valid cascade classifier to enable detection.")
+    webrtc_streamer(
+        key="live-webcam",
+        mode=WebRtcMode.SENDRECV,
+        video_transformer_factory=lambda: LiveVideoTransformer(detector, detection_params),
+        media_stream_constraints={"video": True, "audio": False},
+        async_processing=True,
+    )
+
+# ---------- Display processed image for Image/Camera ----------
+if source in ["Image", "Camera"] and img_original is not None:
     if detector is not None:
         img_processed = process_image(img_original, detector, detection_params)
         img_display = cv.cvtColor(img_processed, cv.COLOR_BGR2RGB)
@@ -465,5 +451,6 @@ if img_original is not None:
     else:
         img_display = cv.cvtColor(img_original, cv.COLOR_BGR2RGB)
         st.image(img_display, use_container_width=True, caption="Original (no detector)")
-else:
-    st.warning("No image available. Please provide input from the selected source.")
+elif source not in ["Image", "Camera", "Video", "Live Webcam"]:
+    # fallback (should not happen)
+    st.warning("No input selected.")
