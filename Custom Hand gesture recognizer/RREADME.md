@@ -2,6 +2,8 @@
 
 An advanced real-time computer vision system that classifies complex hand signs (`happy`, `sad`, and `python`) from dynamic live video feeds. Built on the modern asynchronous **MediaPipe Tasks API**, this pipeline bypasses traditional illumination and background noise issues by focusing entirely on normalized 3D hand geometry.
 
+<img width="926" height="437" alt="image" src="https://github.com/user-attachments/assets/4809b8cc-b54f-4b02-b6d1-fef7220fbeb7" />
+
 ---
 
 ## 📌 Features
