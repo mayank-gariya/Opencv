@@ -8,7 +8,7 @@ import base64
 from pathlib import Path
 
 # CONSTANTS & ANSWER KEY
-FILL_THRESHOLD = 0.35
+FILL_THRESHOLD = 0.15
 MARKS_CORRECT = 4
 MARKS_WRONG = -1
 MARKS_BLANK = 0
@@ -46,7 +46,7 @@ def get_fill_ratio(image, x, y, radius=5):
     pixels = roi[mask == 255]
     if len(pixels) == 0:
         return 0.0
-    dark_pixels = np.sum(pixels < 150)
+    dark_pixels = np.sum(pixels < 180)
     return dark_pixels / len(pixels)
 
 def extract_grid_bubbles(area_gray, min_w=10, max_w=20, min_h=10, max_h=20):
