@@ -162,8 +162,6 @@ This will:
 - Display formatted results in terminal
 - Generate `terminal_report.html`
 
-**Screenshot:**
-- [CLI Output](#)
 
 ### Option 3: Using OMRReader Library (Minimal Code)
 
@@ -196,6 +194,10 @@ for q_num, correct_ans in ANSWER_KEY.items():
 - ✅ Robust to various OMR sheet formats
 
 ---
+
+## Blank Test
+<img width="644" height="879" alt="image" src="https://github.com/user-attachments/assets/79564e53-bb2e-4ce3-a553-7c263af1d6a7" />
+
 
 ## 🎓 Project Journey
 
