@@ -2,6 +2,7 @@
 
 A comprehensive **Optical Mark Recognition (OMR)** evaluation system built with OpenCV for automated grading of OMR sheets. This project supports both CLI and web-based interfaces with detailed reporting capabilities.
 
+Test It Online: [https://opencv-6bygpsjtyx9mbtk7n6epsl.streamlit.app/]
 ---
 
 ## 🎯 Project Overview
@@ -70,28 +71,7 @@ This OMR Checker system automates the evaluation of filled OMR sheets using comp
 ## 📋 How It Works
 
 ### Pipeline Architecture
-
-```
-Uploaded OMR Sheet
-        ↓
-Image Preprocessing (Grayscale conversion)
-        ↓
-Bubble Detection (Contour analysis)
-        ↓
-Geometric Validation (Size, shape, circularity)
-        ↓
-Fill Ratio Analysis (Dark pixel counting)
-        ↓
-Grid Organization (Bubble positioning)
-        ↓
-Metadata Extraction (Roll No, Test ID)
-        ↓
-Answer Extraction (Question-wise analysis)
-        ↓
-Score Evaluation (Apply marking scheme)
-        ↓
-Report Generation (HTML, CSV, Annotated Image)
-```
+<img width="1259" height="673" alt="image" src="https://github.com/user-attachments/assets/8b2c3c54-ad35-4b48-b08e-4d8fe49122a1" />
 
 ### Key Algorithms
 
@@ -166,9 +146,10 @@ Then:
 5. Download HTML report, CSV marksheet, or annotated image
 
 **Screenshots:**
-- [Web Interface](#)
-- [Result Dashboard](#)
-- [HTML Report](#)
+<img width="1873" height="744" alt="image" src="https://github.com/user-attachments/assets/9c9de63f-dcca-46f0-a196-4540dd553bfa" />
+<img width="1874" height="756" alt="image" src="https://github.com/user-attachments/assets/f5bceb80-e981-4383-a43c-07a9543ff507" />
+<img width="1797" height="782" alt="image" src="https://github.com/user-attachments/assets/4654d062-4fea-4818-b395-addc2e4cb658" />
+
 
 ### Option 2: CLI Version with Rich Output
 
@@ -465,12 +446,6 @@ Question,Your Answer,Correct Answer,Status,Marks
 
 ---
 
-## 📄 License
-
-This project is open source and available for educational purposes.
-
----
-
 ## 🙋 Contributing
 
 Contributions are welcome! Please feel free to submit issues, fork the repository, and create pull requests.
@@ -507,29 +482,26 @@ For questions, suggestions, or bug reports:
 ## 📸 Visual Guide
 
 ### Web Application Interface
-```
-[Screenshot: Main web interface with upload area]
-```
+
+<img width="1840" height="885" alt="image" src="https://github.com/user-attachments/assets/8caef641-08c7-4b0c-bbe4-954d41624e53" />
+<img width="1761" height="695" alt="image" src="https://github.com/user-attachments/assets/9c6e1f4c-4c8d-4b0c-8730-16b019e7f9ab" />
+
 
 ### Result Dashboard
-```
-[Screenshot: Score summary with performance metrics]
-```
+<img width="1788" height="841" alt="image" src="https://github.com/user-attachments/assets/97cef20d-e41f-495e-8c99-ec73c91d948a" />
+
 
 ### Annotated OMR Sheet
-```
-[Screenshot: OMR sheet with colored bubble markings]
-```
+<img width="675" height="847" alt="image" src="https://github.com/user-attachments/assets/ff688f21-67cd-45e6-9301-b191721e0c63" />
+
 
 ### CLI Output
-```
-[Screenshot: Rich formatted terminal output with tables]
-```
+<img width="656" height="661" alt="image" src="https://github.com/user-attachments/assets/7248fd5c-bb45-4d3c-84d1-f0a8bcb2c20e" />
+
 
 ### Generated HTML Report
-```
-[Screenshot: Professional HTML report layout]
-```
+<img width="1341" height="900" alt="image" src="https://github.com/user-attachments/assets/9637d06c-d3ba-40cd-a7f9-046a3c1aefe2" />
+<img width="1530" height="873" alt="image" src="https://github.com/user-attachments/assets/acd07b6d-0778-43b4-a351-b6d807d8c777" />
 
 ---
 
