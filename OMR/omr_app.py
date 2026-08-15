@@ -257,7 +257,7 @@ def generate_html_report(roll_number, test_id, student_answers, correct_count, w
         </div>
     </body>
     </html>
-    """
+    
     return html
 
 # DOWNLOAD FUNCTIONS
@@ -334,7 +334,7 @@ st.markdown("Upload the **filled** OMR sheet. The blank template is static and l
 
 # ---- Load the static blank image ----
 current_dir = Path(__file__).parent
-BLANK_IMAGE_PATH = current_dir / "download.jfif"
+BLANK_IMAGE_PATH = current_dir / "Blank_file.png"
 
 if not os.path.exists(BLANK_IMAGE_PATH):
     st.error(f"Blank image not found at '{BLANK_IMAGE_PATH}'. Please place the blank OMR image in the app directory.")
