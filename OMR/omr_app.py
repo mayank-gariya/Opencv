@@ -497,17 +497,13 @@ with tab_app:
 
         score_text = f"{total_score} / {max_possible_marks} | {percentage:.2f}%"
 
-        st.markdown(
-            f"""
-            <div style="border: 3px solid {border_color}; border-radius: 10px; padding: 20px; margin: 10px 0; background-color: #f9f9f9;">
-                <h2 style="text-align: center; color: {border_color};">{emoji} Final Result</h2>
-                <p style="text-align: center; font-size: 24px; font-weight: bold; color: {border_color};">
-                    {score_text}
-                </p>
-            </div>
-            """,
-            unsafe_allow_html=True,
+        html_code = (
+            f'<div style="border: 3px solid {border_color}; border-radius: 10px; padding: 20px; margin: 10px 0; background-color: #f9f9f9;">'
+            f'<h2 style="text-align: center; color: {border_color};">{emoji} Final Result</h2>'
+            f'<p style="text-align: center; font-size: 24px; font-weight: bold; color: {border_color};">{score_text}</p>'
+            f'</div>'
         )
+        st.markdown(html_code, unsafe_allow_html=True)
 
         # 6. Download Options
         st.divider()
