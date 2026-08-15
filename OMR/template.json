@@ -1,0 +1,32 @@
+{
+  "title": "Standard Exam OMR Sheet",
+  "pageDimensions": [1000, 1414],
+  "bubbleDimensions": [20, 20],
+  "preProcessors": [
+    {
+      "name": "CropOnMarkers",
+      "options": {
+        "relativePath": "markers/corner_marker.png"
+      }
+    }
+  ],
+  "fieldBlocks": {
+    "RollNumber": {
+      "fieldType": "GRID",
+      "origin": [50, 150],
+      "dimensions": [10, 7],
+      "gapX": 20,
+      "gapY": 20,
+      "concateInference": true,
+      "labels": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
+    },
+    "Section_1": {
+      "fieldType": "MCQ",
+      "origin": [300, 400],
+      "dimensions": [30, 4],
+      "gapX": 25,
+      "gapY": 18,
+      "labels": ["A", "B", "C", "D"]
+    }
+  }
+}
