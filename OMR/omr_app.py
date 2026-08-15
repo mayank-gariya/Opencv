@@ -341,11 +341,10 @@ tab_info, tab_app = st.tabs(["ℹ️ Instructions & Sample Sheet", "🚀 Evaluat
 
 with tab_info:
     st.subheader("How to Test This App")
-    st.markdown("""
-    1. **Download** the sample blank OMR sheet below.
-    2. **Print or edit** the sheet to fill in the answer bubbles.
-    3. Switch to the **Evaluate OMR Sheet** tab to upload and calculate your score!
-    """)
+    st.markdown("1. **Download** the sample blank OMR sheet below.")
+    st.markdown("2. **Print or edit** the sheet to fill in the answer bubbles.")
+    st.markdown("3. Switch to the **Evaluate OMR Sheet** tab to upload and calculate your score!")
+    
     if os.path.exists(BLANK_IMAGE_PATH):
         with open(BLANK_IMAGE_PATH, "rb") as file:
             st.download_button(
