@@ -332,25 +332,21 @@ st.set_page_config(page_title="OMR Evaluation System", layout="wide")
 st.title("📝 Automated OMR Evaluation System")
 st.markdown("Upload the **filled** OMR sheet. The blank template is static and loaded automatically.")
 
+# STREAMLIT APP
 # ---- Load the static blank image ----
 current_dir = Path(__file__).parent
 BLANK_IMAGE_PATH = current_dir / "Blank_file.png"
 
-if not os.path.exists(BLANK_IMAGE_PATH):
-    st.error(f"Blank image not found at '{BLANK_IMAGE_PATH}'. Please place the blank OMR image in the app directory.")
-    st.stop()
-    
 tab_info, tab_app = st.tabs(["ℹ️ Instructions & Sample Sheet", "🚀 Evaluate OMR Sheet"])
 
 with tab_info:
     st.subheader("How to Test This App")
-    st.markdown(
-        """
-        1. **Download** the sample blank OMR sheet below.
-        2. **Print or edit** the sheet to fill in the answer bubbles.
-        3. Switch to the **Evaluate OMR Sheet** tab to upload and calculate your score!
-        """)
-    try:
+    st.markdown("""
+    1. **Download** the sample blank OMR sheet below.
+    2. **Print or edit** the sheet to fill in the answer bubbles.
+    3. Switch to the **Evaluate OMR Sheet** tab to upload and calculate your score!
+    """)
+    if os.path.exists(BLANK_IMAGE_PATH):
         with open(BLANK_IMAGE_PATH, "rb") as file:
             st.download_button(
                 label="📥 Download Blank OMR Sheet Template",
@@ -359,69 +355,72 @@ with tab_info:
                 mime="image/png",
                 use_container_width=True
             )
-    except FileNotFoundError:
-        st.warning("Sample image file not found.")
+    else:
+        st.warning("⚠️ `Blank_file.png` is not uploaded to the repository yet. Upload it to enable downloading.")
 
 with tab_app:
-        
-    blank_img = cv.imread(BLANK_IMAGE_PATH)
+    if not os.path.exists(BLANK_IMAGE_PATH):
+        st.error(f"Blank image not found at '{BLANK_IMAGE_PATH}'. Please commit `Blank_file.png` into the OMR folder.")
+        st.stop()
+
+    blank_img = cv.imread(str(BLANK_IMAGE_PATH))
     if blank_img is None:
         st.error("Failed to load blank image. Ensure it is a valid image file.")
         st.stop()
-    
+        
     blank_gray = cv.cvtColor(blank_img, cv.COLOR_BGR2GRAY)
-    
+
     # ---- Upload filled image ----
-    filled_file = st.file_uploader("Upload **Filled** OMR", type=["png", "jpg", "jpeg",'jfif'])
-    
+    filled_file = st.file_uploader("Upload **Filled** OMR", type=["png", "jpg", "jpeg", "jfif"])
+
     if filled_file is not None:
-        # Read filled image
         filled_bytes = np.asarray(bytearray(filled_file.read()), dtype=np.uint8)
         filled_img = cv.imdecode(filled_bytes, cv.IMREAD_COLOR)
         if filled_img is None:
             st.error("Failed to decode filled image. Please upload a valid image file.")
             st.stop()
-    
+        
         filled_gray = cv.cvtColor(filled_img, cv.COLOR_BGR2GRAY)
-    
+
         # 1. Roll Number & Test ID
         roll_area_blank = blank_gray[155:380, 35:240]
         roll_area_filled = filled_gray[155:380, 35:240]
         test_id_area_blank = blank_gray[155:380, 250:360]
         test_id_area_filled = filled_gray[155:380, 250:360]
-    
+
         roll_number = parse_digit_grid(roll_area_blank, roll_area_filled)
         test_id = parse_digit_grid(test_id_area_blank, test_id_area_filled)
-    
+
         # 2. Answer Area
         blank_answer_area = blank_gray[400:980, 70:690]
         filled_answer_area = filled_gray[400:980, 70:690]
-    
+
         bubble_centers = extract_grid_bubbles(blank_answer_area)
         rows = organize_into_rows(bubble_centers)
         questions = get_question_bubbles(rows)
-    
+
         options_map = ["A", "B", "C", "D"]
         student_answers = {}
-    
+
         for q_num, q_bubbles in questions.items():
             marked_options = []
             for opt_idx, (x, y) in enumerate(q_bubbles):
                 ratio = get_fill_ratio(filled_answer_area, x, y)
                 if ratio >= FILL_THRESHOLD:
                     marked_options.append(options_map[opt_idx])
+            
             if len(marked_options) == 1:
                 student_answers[q_num] = marked_options[0]
             elif len(marked_options) > 1:
                 student_answers[q_num] = "MULTIPLE"
             else:
                 student_answers[q_num] = "BLANK"
-    
+
         # 3. Score Calculation
         correct_count = wrong_count = blank_count = multiple_count = 0
         total_score = 0
         question_details = {}
-    
+
         for q_num, correct_ans in ANSWER_KEY.items():
             ans = student_answers.get(q_num, "BLANK")
             marks = 0
@@ -443,7 +442,7 @@ with tab_app:
                 wrong_count += 1
                 marks = MARKS_WRONG
                 status = "Wrong"
-            
+                
             total_score += marks
             question_details[q_num] = {
                 'student_answer': ans,
@@ -451,49 +450,41 @@ with tab_app:
                 'status': status,
                 'marks': marks
             }
-    
+
         total_questions = len(ANSWER_KEY)
         max_possible_marks = total_questions * MARKS_CORRECT
         percentage = (total_score / max_possible_marks) * 100 if max_possible_marks > 0 else 0
-    
+
         # 4. Display Full OMR with Annotations
         st.subheader("📄 Full OMR Sheet with Annotations")
-        
         annotated_full = display_full_omr_with_annotations(filled_img, questions, student_answers, ANSWER_KEY)
         st.image(annotated_full, channels="BGR", use_container_width=True)
-        
         st.info("✅ Green circles = Correct answers | ❌ Red circles = Wrong answers | ⚪ Gray circles = Not selected")
-    
+
         # 5. Display Results
         st.divider()
         col_info, col_score = st.columns(2)
-    
+
         with col_info:
             st.subheader("📋 Candidate Information")
             st.metric("Roll Number", roll_number)
             st.metric("Test ID", test_id)
-    
+
         with col_score:
             st.subheader("📊 Score Summary")
             st.metric("Total Score", f"{total_score} / {max_possible_marks}")
-            st.metric("Percentage", f"{percentage:.2f}%", delta=None)
-    
+            st.metric("Percentage", f"{percentage:.2f}%")
+
         # Breakdown table
         st.subheader("🔍 Performance Breakdown")
         breakdown_data = {
             "Category": ["Total Questions", "Correct (+4)", "Wrong (-1)", "Blank (0)", "Multiple (0)"],
             "Count": [total_questions, correct_count, wrong_count, blank_count, multiple_count],
-            "Impact": [
-                f"{total_questions}",
-                f"+{correct_count * MARKS_CORRECT}",
-                f"{wrong_count * MARKS_WRONG}",
-                "0",
-                "0"
-            ]
+            "Impact": [f"{total_questions}", f"+{correct_count * MARKS_CORRECT}", f"{wrong_count * MARKS_WRONG}", "0", "0"]
         }
         st.table(breakdown_data)
-    
-        # Result panel 
+
+        # Result panel
         if percentage >= 60:
             border_color = "green"
             emoji = "✅"
@@ -503,7 +494,8 @@ with tab_app:
         else:
             border_color = "red"
             emoji = "❌"
-    
+
+        # Fixed syntax error string interpolation here
         st.markdown(
             f"""
             <div style="border: 3px solid {border_color}; border-radius: 10px; padding: 20px; margin: 10px 0; background-color: #f9f9f9;">
@@ -515,36 +507,27 @@ with tab_app:
             """,
             unsafe_allow_html=True
         )
-    
+
         # 6. Download Options
         st.divider()
         st.subheader("📥 Download Reports")
-        
         col1, col2, col3 = st.columns(3)
-        
+
         with col1:
-            # Generate HTML report
             html_report = generate_html_report(
                 roll_number, test_id, student_answers, correct_count, wrong_count,
-                blank_count, multiple_count, total_score, max_possible_marks,
-                percentage, question_details
+                blank_count, multiple_count, total_score, max_possible_marks, percentage, question_details
             )
-            html_bytes = html_report.encode('utf-8')
-            
             st.download_button(
                 label="📄 Download HTML Report",
-                data=html_bytes,
+                data=html_report.encode('utf-8'),
                 file_name=f"OMR_Report_{roll_number}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
                 mime="text/html",
                 use_container_width=True
             )
-        
+
         with col2:
-            # Generate CSV marksheet
-            csv_data = generate_marksheet_csv(
-                roll_number, test_id, question_details, total_score, max_possible_marks, percentage
-            )
-            
+            csv_data = generate_marksheet_csv(roll_number, test_id, question_details, total_score, max_possible_marks, percentage)
             st.download_button(
                 label="📊 Download CSV Marksheet",
                 data=csv_data,
@@ -552,36 +535,32 @@ with tab_app:
                 mime="text/csv",
                 use_container_width=True
             )
-        
+
         with col3:
-            # Download annotated image
             is_success, img_buffer = cv.imencode(".png", annotated_full)
             if is_success:
-                img_bytes = img_buffer.tobytes()
                 st.download_button(
                     label="🖼️ Download Annotated Image",
-                    data=img_bytes,
+                    data=img_buffer.tobytes(),
                     file_name=f"OMR_Annotated_{roll_number}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png",
                     mime="image/png",
                     use_container_width=True
                 )
-    
+
         # 7. Detailed Question-wise Analysis
         with st.expander("📋 Show Detailed Question-wise Analysis"):
-        # Create a dataframe for better display
-            df_data = []
-            for q_num, details in question_details.items():
-                df_data.append({
+            df_data = [
+                {
                     'Question': q_num,
                     'Your Answer': details['student_answer'],
                     'Correct Answer': details['correct_answer'],
                     'Status': details['status'],
                     'Marks': details['marks']
-                })
-            
+                }
+                for q_num, details in question_details.items()
+            ]
             df = pd.DataFrame(df_data)
-            
-            # Color code the status using map (new method)
+
             def color_status(val):
                 if val == 'Correct':
                     return 'background-color: #d4edda'
@@ -591,10 +570,8 @@ with tab_app:
                     return 'background-color: #e2e3e5'
                 else:
                     return 'background-color: #fff3cd'
-            
-            # Use map instead of applymap
+
             styled_df = df.style.map(color_status, subset=['Status'])
             st.dataframe(styled_df, use_container_width=True)
-    
     else:
         st.info("👆 Please upload the filled OMR image to begin evaluation.")
