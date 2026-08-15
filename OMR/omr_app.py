@@ -7,7 +7,9 @@ from datetime import datetime
 import base64
 from pathlib import Path
 
-# CONSTANTS & ANSWER KEY
+# ===================================================================
+# CONSTANTS & CONFIGURATION
+# ===================================================================
 FILL_THRESHOLD = 0.35
 MARKS_CORRECT = 4
 MARKS_WRONG = -1
@@ -35,8 +37,11 @@ ANSWER_KEY = {
     171: "A", 172: "B", 173: "C", 174: "D", 175: "A", 176: "B", 177: "C", 178: "D", 179: "A", 180: "B"
 }
 
+# ===================================================================
 # HELPER FUNCTIONS
+# ===================================================================
 def get_fill_ratio(image, x, y, radius=5):
+    """Calculates the fill ratio of dark pixels inside a circular ROI."""
     roi = image[y - radius : y + radius + 1, x - radius : x + radius + 1]
     if roi.size == 0:
         return 0.0
@@ -50,6 +55,7 @@ def get_fill_ratio(image, x, y, radius=5):
     return dark_pixels / len(pixels)
 
 def extract_grid_bubbles(area_gray, min_w=10, max_w=20, min_h=10, max_h=20):
+    """Extracts valid bubble center coordinates from a given cropped region."""
     _, thres = cv.threshold(area_gray, 200, 255, cv.THRESH_BINARY_INV)
     contours, _ = cv.findContours(thres, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
     bubble_centers = []
@@ -60,11 +66,13 @@ def extract_grid_bubbles(area_gray, min_w=10, max_w=20, min_h=10, max_h=20):
         if perimeter == 0:
             continue
         circularity = (4 * np.pi * area) / (perimeter * perimeter)
-        if (min_w <= w <= max_w and min_h <= h <= max_h and 0.85 <= w / h <= 1.15 and 50 <= area <= 180 and 0.4 <= circularity <= 1.3):
+        if (min_w <= w <= max_w and min_h <= h <= max_h and 
+            0.85 <= w / h <= 1.15 and 50 <= area <= 180 and 0.4 <= circularity <= 1.3):
             bubble_centers.append((x + w // 2, y + h // 2))
     return bubble_centers
 
 def organize_into_rows(bubbles, y_threshold=5):
+    """Sorts bubbles into rows based on Y coordinates."""
     bubbles = sorted(bubbles, key=lambda p: p[1])
     rows = []
     current_row = []
@@ -75,7 +83,7 @@ def organize_into_rows(bubbles, y_threshold=5):
         else:
             rows.append(current_row)
             current_row = [(x, y)]
-            previous_y = y
+        previous_y = y
     if current_row:
         rows.append(current_row)
     for row in rows:
@@ -83,6 +91,7 @@ def organize_into_rows(bubbles, y_threshold=5):
     return rows
 
 def parse_digit_grid(blank_crop, filled_crop):
+    """Parses column-based digit grids (Roll No. / Test ID)."""
     centers = extract_grid_bubbles(blank_crop)
     rows = organize_into_rows(centers)
     if not rows:
@@ -106,6 +115,7 @@ def parse_digit_grid(blank_crop, filled_crop):
     return "".join(digits)
 
 def get_question_bubbles(rows):
+    """Maps question numbers to their corresponding bubble coordinates."""
     questions = {}
     for row_index, row in enumerate(rows):
         for block in range(6):
@@ -115,7 +125,10 @@ def get_question_bubbles(rows):
             questions[question_number] = row[start:end]
     return questions
 
-def generate_html_report(roll_number, test_id, student_answers, correct_count, wrong_count, blank_count, multiple_count, total_score, max_possible_marks, percentage, question_details):
+def generate_html_report(roll_number, test_id, student_answers, correct_count, wrong_count, 
+                         blank_count, multiple_count, total_score, max_possible_marks, 
+                         percentage, question_details):
+    """Generates a styled HTML report for download."""
     rows_html = ""
     for q_num, details in question_details.items():
         status_class = details['status'].lower()
@@ -128,95 +141,103 @@ def generate_html_report(roll_number, test_id, student_answers, correct_count, w
             status_text = "⬜ " + status_text
         else:
             status_text = "⚠️ " + status_text
-        
-        rows_html += f"<tr><td>{q_num}</td><td>{details['student_answer']}</td><td>{details['correct_answer']}</td><td class='{status_class}'>{status_text}</td><td>{details['marks']}</td></tr>"
+        rows_html += f"""<tr>
+            <td>{q_num}</td>
+            <td>{details['student_answer']}</td>
+            <td>{details['correct_answer']}</td>
+            <td class='{status_class}'>{status_text}</td>
+            <td>{details['marks']}</td>
+        </tr>"""
 
     html = f"""<!DOCTYPE html>
 <html>
 <head>
-<title>OMR Evaluation Report - {roll_number}</title>
-<style>
-body {{ font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }}
-.container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-.header {{ text-align: center; border-bottom: 3px solid #4CAF50; padding-bottom: 20px; }}
-.header h1 {{ color: #333; margin: 0; }}
-.header h2 {{ color: #666; font-weight: normal; }}
-.info-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }}
-.info-item {{ background: #f8f9fa; padding: 15px; border-radius: 5px; }}
-.info-item label {{ font-weight: bold; color: #555; }}
-.score-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 20px 0; }}
-.score-card {{ background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; }}
-.score-card.green {{ background: #d4edda; border: 2px solid #28a745; }}
-.score-card.yellow {{ background: #fff3cd; border: 2px solid #ffc107; }}
-.score-card.red {{ background: #f8d7da; border: 2px solid #dc3545; }}
-.score-card .number {{ font-size: 32px; font-weight: bold; }}
-.score-card .label {{ color: #666; margin-top: 5px; }}
-table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
-th {{ background: #4CAF50; color: white; padding: 12px; text-align: left; }}
-td {{ padding: 10px; border-bottom: 1px solid #ddd; }}
-tr:hover {{ background: #f5f5f5; }}
-.correct {{ color: green; font-weight: bold; }}
-.wrong {{ color: red; font-weight: bold; }}
-.blank {{ color: gray; }}
-.multiple {{ color: orange; font-weight: bold; }}
-.footer {{ text-align: center; margin-top: 30px; color: #999; font-size: 12px; }}
-</style>
+    <title>OMR Evaluation Report - {roll_number}</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }}
+        .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 30px; 
+                     border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+        .header {{ text-align: center; border-bottom: 3px solid #4CAF50; padding-bottom: 20px; }}
+        .header h1 {{ color: #333; margin: 0; }}
+        .header h2 {{ color: #666; font-weight: normal; }}
+        .info-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }}
+        .info-item {{ background: #f8f9fa; padding: 15px; border-radius: 5px; }}
+        .info-item label {{ font-weight: bold; color: #555; }}
+        .score-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 20px 0; }}
+        .score-card {{ background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; }}
+        .score-card.green {{ background: #d4edda; border: 2px solid #28a745; }}
+        .score-card.yellow {{ background: #fff3cd; border: 2px solid #ffc107; }}
+        .score-card.red {{ background: #f8d7da; border: 2px solid #dc3545; }}
+        .score-card .number {{ font-size: 32px; font-weight: bold; }}
+        .score-card .label {{ color: #666; margin-top: 5px; }}
+        table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+        th {{ background: #4CAF50; color: white; padding: 12px; text-align: left; }}
+        td {{ padding: 10px; border-bottom: 1px solid #ddd; }}
+        tr:hover {{ background: #f5f5f5; }}
+        .correct {{ color: green; font-weight: bold; }}
+        .wrong {{ color: red; font-weight: bold; }}
+        .blank {{ color: gray; }}
+        .multiple {{ color: orange; font-weight: bold; }}
+        .footer {{ text-align: center; margin-top: 30px; color: #999; font-size: 12px; }}
+    </style>
 </head>
 <body>
-<div class="container">
-<div class="header">
-<h1>📝 OMR Evaluation Report</h1>
-<h2>Automated Answer Sheet Evaluation</h2>
-<p>Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
-</div>
-<div class="info-grid">
-<div class="info-item">
-<label>Roll Number:</label><br>
-<span style="font-size: 24px; font-weight: bold;">{roll_number}</span>
-</div>
-<div class="info-item">
-<label>Test ID:</label><br>
-<span style="font-size: 24px; font-weight: bold;">{test_id}</span>
-</div>
-</div>
-<div class="score-grid">
-<div class="score-card green">
-<div class="number">{total_score}</div>
-<div class="label">Total Score (out of {max_possible_marks})</div>
-</div>
-<div class="score-card yellow">
-<div class="number">{percentage:.1f}%</div>
-<div class="label">Percentage</div>
-</div>
-<div class="score-card green">
-<div class="number">{correct_count}</div>
-<div class="label">Correct Answers</div>
-</div>
-</div>
-<h3>📋 Question-wise Analysis</h3>
-<table>
-<thead>
-<tr>
-<th>Q.No</th>
-<th>Student Answer</th>
-<th>Correct Answer</th>
-<th>Status</th>
-<th>Marks</th>
-</tr>
-</thead>
-<tbody>
-{rows_html}
-</tbody>
-</table>
-<div class="footer">
-<p>This is a computer-generated report. Please verify with the original OMR sheet.</p>
-</div>
-</div>
+    <div class="container">
+        <div class="header">
+            <h1>📝 OMR Evaluation Report</h1>
+            <h2>Automated Answer Sheet Evaluation</h2>
+            <p>Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
+        </div>
+        <div class="info-grid">
+            <div class="info-item">
+                <label>Roll Number:</label><br>
+                <span style="font-size: 24px; font-weight: bold;">{roll_number}</span>
+            </div>
+            <div class="info-item">
+                <label>Test ID:</label><br>
+                <span style="font-size: 24px; font-weight: bold;">{test_id}</span>
+            </div>
+        </div>
+        <div class="score-grid">
+            <div class="score-card green">
+                <div class="number">{total_score}</div>
+                <div class="label">Total Score (out of {max_possible_marks})</div>
+            </div>
+            <div class="score-card yellow">
+                <div class="number">{percentage:.1f}%</div>
+                <div class="label">Percentage</div>
+            </div>
+            <div class="score-card green">
+                <div class="number">{correct_count}</div>
+                <div class="label">Correct Answers</div>
+            </div>
+        </div>
+        <h3>📋 Question-wise Analysis</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Q.No</th>
+                    <th>Student Answer</th>
+                    <th>Correct Answer</th>
+                    <th>Status</th>
+                    <th>Marks</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_html}
+            </tbody>
+        </table>
+        <div class="footer">
+            <p>This is a computer-generated report. Please verify with the original OMR sheet.</p>
+        </div>
+    </div>
 </body>
 </html>"""
     return html
 
-def generate_marksheet_csv(roll_number, test_id, question_details, total_score, max_possible_marks, percentage):
+def generate_marksheet_csv(roll_number, test_id, question_details, total_score, 
+                          max_possible_marks, percentage):
+    """Generates a CSV marksheet for download."""
     data = []
     for q_num, details in question_details.items():
         data.append({
@@ -230,17 +251,24 @@ def generate_marksheet_csv(roll_number, test_id, question_details, total_score, 
     data.append({'Question': 'SUMMARY', 'Student Answer': '', 'Correct Answer': '', 'Status': '', 'Marks': ''})
     data.append({'Question': 'Roll Number', 'Student Answer': roll_number, 'Correct Answer': '', 'Status': '', 'Marks': ''})
     data.append({'Question': 'Test ID', 'Student Answer': test_id, 'Correct Answer': '', 'Status': '', 'Marks': ''})
-    data.append({'Question': 'Total Score', 'Student Answer': f'{total_score}/{max_possible_marks}', 'Correct Answer': '', 'Status': '', 'Marks': ''})
-    data.append({'Question': 'Percentage', 'Student Answer': f'{percentage:.2f}%', 'Correct Answer': '', 'Status': '', 'Marks': ''})
+    data.append({'Question': 'Total Score', 'Student Answer': f'{total_score}/{max_possible_marks}', 
+                'Correct Answer': '', 'Status': '', 'Marks': ''})
+    data.append({'Question': 'Percentage', 'Student Answer': f'{percentage:.2f}%', 
+                'Correct Answer': '', 'Status': '', 'Marks': ''})
     df = pd.DataFrame(data)
     return df.to_csv(index=False).encode('utf-8')
 
-def display_full_omr_with_annotations(original_image, questions, student_answers, answer_key, roll_number, test_id, total_score, max_possible_marks):
+def display_full_omr_with_annotations(original_image, questions, student_answers, answer_key, 
+                                      roll_number, test_id, total_score, max_possible_marks):
+    """Annotates the full OMR sheet with evaluation results."""
     img_display = original_image.copy()
     x_start, x_end = 70, 690
     y_start, y_end = 400, 980
+    
     cv.rectangle(img_display, (x_start, y_start), (x_end, y_end), (0, 255, 0), 2)
-    cv.putText(img_display, "Answer Area", (x_start, y_start-10), cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+    cv.putText(img_display, "Answer Area", (x_start, y_start-10), 
+               cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+    
     options_map = ["A", "B", "C", "D"]
     
     for q_num, q_bubbles in questions.items():
@@ -257,60 +285,88 @@ def display_full_omr_with_annotations(original_image, questions, student_answers
                 cv.circle(img_display, (full_x, full_y), 3, (200, 200, 200), 1)
 
     info_text = f"Roll: {roll_number} | Test: {test_id} | Score: {total_score}/{max_possible_marks}"
-    cv.putText(img_display, info_text, (10, 30), cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+    cv.putText(img_display, info_text, (10, 30), 
+               cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
     return img_display
 
+# ===================================================================
 # STREAMLIT UI SETUP
+# ===================================================================
 st.set_page_config(page_title="OMR Evaluation System", layout="wide")
 st.title("📄 Automated OMR Evaluation System")
 
+# File path configuration
 current_dir = Path(__file__).parent
 BLANK_IMAGE_PATH = current_dir / "Blank_file.jfif"
 
+# ===================================================================
+# TABS: Instructions & App
+# ===================================================================
 tab_info, tab_app = st.tabs(["ℹ️ Instructions & Sample Sheet", "🚀 Evaluate OMR Sheet"])
 
 with tab_info:
-    st.subheader("How to Test This App")
-    st.markdown("1. Download the sample blank OMR sheet below.")
-    st.markdown("2. Print or edit the sheet to fill in the answer bubbles.")
-    st.markdown("3. Switch to the Evaluate OMR Sheet tab to upload and calculate your score!")
-
+    st.subheader("📋 How to Use This App")
+    st.markdown("""
+    1. **Download** the blank OMR sheet template below
+    2. **Print** the sheet and fill in the answer bubbles with a dark pencil/pen
+    3. **Scan** or take a photo of the filled sheet
+    4. **Switch** to the 'Evaluate OMR Sheet' tab
+    5. **Upload** the filled sheet for automatic evaluation
+    """)
+    
+    st.divider()
+    
+    # Download blank template
     if os.path.exists(BLANK_IMAGE_PATH):
         with open(BLANK_IMAGE_PATH, "rb") as file:
             st.download_button(
                 label="📥 Download Blank OMR Sheet Template",
                 data=file,
-                file_name="blank_omr_template.png",
-                mime="image/png",
+                file_name="blank_omr_template.jfif",
+                mime="image/jfif",
                 use_container_width=True
             )
+        st.caption("💡 Save this file, print it, and fill in the bubbles.")
     else:
-        st.warning("⚠️ `Blank_file.png` is not uploaded to the repository yet.")
+        st.warning("⚠️ Blank template file not found in the repository.")
+        st.info(f"Expected path: `{BLANK_IMAGE_PATH}`")
 
 with tab_app:
+    # Verify blank template exists
     if not os.path.exists(BLANK_IMAGE_PATH):
-        st.error(f"Blank image missing at '{BLANK_IMAGE_PATH}'. Please upload `Blank_file.png` to the repository.")
+        st.error(f"❌ Blank image missing at '{BLANK_IMAGE_PATH}'")
+        st.info("Please ensure `Blank_file.jfif` is in the repository root directory.")
         st.stop()
 
+    # Load blank template
     blank_img = cv.imread(str(BLANK_IMAGE_PATH))
     if blank_img is None:
-        st.error("Failed to load blank image.")
+        st.error("❌ Failed to load blank image. The file may be corrupted.")
         st.stop()
-        
+    
     blank_gray = cv.cvtColor(blank_img, cv.COLOR_BGR2GRAY)
 
-    filled_file = st.file_uploader("Upload **Filled** OMR", type=["png", "jpg", "jpeg", "jfif"])
+    # File uploader for filled OMR
+    filled_file = st.file_uploader(
+        "Upload **Filled** OMR Sheet", 
+        type=["png", "jpg", "jpeg", "jfif"],
+        help="Upload the filled OMR sheet (scan or photo)"
+    )
 
     if filled_file is not None:
+        # Load filled image
         filled_bytes = np.asarray(bytearray(filled_file.read()), dtype=np.uint8)
         filled_img = cv.imdecode(filled_bytes, cv.IMREAD_COLOR)
+        
         if filled_img is None:
-            st.error("Failed to decode filled image.")
+            st.error("❌ Failed to decode filled image. Please upload a valid image file.")
             st.stop()
         
         filled_gray = cv.cvtColor(filled_img, cv.COLOR_BGR2GRAY)
 
-        # Parse Metadata
+        # ===========================================================
+        # EXTRACT ROLL NUMBER & TEST ID
+        # ===========================================================
         roll_area_blank = blank_gray[155:380, 35:240]
         roll_area_filled = filled_gray[155:380, 35:240]
         test_id_area_blank = blank_gray[155:380, 250:360]
@@ -319,7 +375,9 @@ with tab_app:
         roll_number = parse_digit_grid(roll_area_blank, roll_area_filled)
         test_id = parse_digit_grid(test_id_area_blank, test_id_area_filled)
 
-        # Parse Answers
+        # ===========================================================
+        # EXTRACT ANSWERS
+        # ===========================================================
         blank_answer_area = blank_gray[400:980, 70:690]
         filled_answer_area = filled_gray[400:980, 70:690]
 
@@ -344,7 +402,9 @@ with tab_app:
             else:
                 student_answers[q_num] = "BLANK"
 
-        # Calculate Scores
+        # ===========================================================
+        # CALCULATE SCORES
+        # ===========================================================
         correct_count = wrong_count = blank_count = multiple_count = 0
         total_score = 0
         question_details = {}
@@ -383,13 +443,22 @@ with tab_app:
         max_possible_marks = total_questions * MARKS_CORRECT
         percentage = (total_score / max_possible_marks) * 100 if max_possible_marks > 0 else 0
 
-        # Annotations
+        # ===========================================================
+        # DISPLAY ANNOTATED OMR
+        # ===========================================================
         st.subheader("📄 Full OMR Sheet with Annotations")
-        annotated_full = display_full_omr_with_annotations(filled_img, questions, student_answers, ANSWER_KEY, roll_number, test_id, total_score, max_possible_marks)
+        annotated_full = display_full_omr_with_annotations(
+            filled_img, questions, student_answers, ANSWER_KEY, 
+            roll_number, test_id, total_score, max_possible_marks
+        )
         st.image(annotated_full, channels="BGR", use_container_width=True)
+        st.caption("✅ Green = Correct | ❌ Red = Wrong | ⚪ Gray = Not Selected")
 
-        # Summary Display
+        # ===========================================================
+        # DISPLAY RESULTS
+        # ===========================================================
         st.divider()
+        
         col_info, col_score = st.columns(2)
 
         with col_info:
@@ -402,31 +471,58 @@ with tab_app:
             st.metric("Total Score", f"{total_score} / {max_possible_marks}")
             st.metric("Percentage", f"{percentage:.2f}%")
 
-        # Result Panel
+        # Performance Breakdown
+        st.subheader("📊 Performance Breakdown")
+        breakdown_data = {
+            "Category": ["Total Questions", "Correct (+4)", "Wrong (-1)", "Blank (0)", "Multiple (0)"],
+            "Count": [total_questions, correct_count, wrong_count, blank_count, multiple_count],
+            "Impact": [
+                f"{total_questions}",
+                f"+{correct_count * MARKS_CORRECT}",
+                f"{wrong_count * MARKS_WRONG}",
+                "0",
+                "0"
+            ]
+        }
+        st.table(breakdown_data)
+
+        # Final Result Panel
         if percentage >= 60:
             border_color = "green"
             emoji = "✅"
+            status_text = "PASSED"
         elif percentage >= 40:
             border_color = "orange"
             emoji = "⚠️"
+            status_text = "NEEDS IMPROVEMENT"
         else:
             border_color = "red"
             emoji = "❌"
+            status_text = "FAILED"
 
-        score_display_text = f"{total_score} / {max_possible_marks} | {percentage:.2f}%"
-
-        result_html = f'<div style="border: 3px solid {border_color}; border-radius: 10px; padding: 20px; margin: 10px 0; background-color: #f9f9f9;"><h2 style="text-align: center; color: {border_color};">{emoji} Final Result</h2><p style="text-align: center; font-size: 24px; font-weight: bold; color: {border_color};">{score_display_text}</p></div>'
+        result_html = f"""
+        <div style="border: 3px solid {border_color}; border-radius: 10px; padding: 20px; margin: 10px 0; background-color: #f9f9f9;">
+            <h2 style="text-align: center; color: {border_color};">{emoji} Final Result: {status_text}</h2>
+            <p style="text-align: center; font-size: 24px; font-weight: bold; color: {border_color};">
+                {total_score} / {max_possible_marks} | {percentage:.2f}%
+            </p>
+        </div>
+        """
         st.markdown(result_html, unsafe_allow_html=True)
 
-        # Download Links
+        # ===========================================================
+        # DOWNLOAD BUTTONS
+        # ===========================================================
         st.divider()
         st.subheader("📥 Download Reports")
+        
         col1, col2, col3 = st.columns(3)
 
         with col1:
             html_report = generate_html_report(
                 roll_number, test_id, student_answers, correct_count, wrong_count,
-                blank_count, multiple_count, total_score, max_possible_marks, percentage, question_details
+                blank_count, multiple_count, total_score, max_possible_marks, 
+                percentage, question_details
             )
             st.download_button(
                 label="📄 Download HTML Report",
@@ -437,7 +533,10 @@ with tab_app:
             )
 
         with col2:
-            csv_data = generate_marksheet_csv(roll_number, test_id, question_details, total_score, max_possible_marks, percentage)
+            csv_data = generate_marksheet_csv(
+                roll_number, test_id, question_details, total_score, 
+                max_possible_marks, percentage
+            )
             st.download_button(
                 label="📊 Download CSV Marksheet",
                 data=csv_data,
@@ -457,8 +556,10 @@ with tab_app:
                     use_container_width=True
                 )
 
-        # Question Breakdown
-        with st.expander("📋 Show Detailed Question-wise Analysis"):
+        # ===========================================================
+        # DETAILED QUESTION ANALYSIS
+        # ===========================================================
+        with st.expander("📋 Show Detailed Question-wise Analysis", expanded=False):
             df_data = [
                 {
                     'Question': q_num,
@@ -483,5 +584,6 @@ with tab_app:
 
             styled_df = df.style.map(color_status, subset=['Status'])
             st.dataframe(styled_df, use_container_width=True)
+
     else:
         st.info("👆 Please upload the filled OMR image to begin evaluation.")
