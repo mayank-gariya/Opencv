@@ -312,7 +312,6 @@ with tab_info:
     if os.path.exists(BLANK_IMAGE_PATH):
         with open(BLANK_IMAGE_PATH, "rb") as file:
 
-            st.image(file)
             st.download_button(
                 label="📥 Download Blank OMR Sheet Template",
                 data=file,
