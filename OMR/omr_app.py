@@ -7,9 +7,7 @@ from datetime import datetime
 import base64
 from pathlib import Path
 
-# ===================================================================
 # CONSTANTS & CONFIGURATION
-# ===================================================================
 FILL_THRESHOLD = 0.35
 MARKS_CORRECT = 4
 MARKS_WRONG = -1
@@ -37,9 +35,7 @@ ANSWER_KEY = {
     171: "A", 172: "B", 173: "C", 174: "D", 175: "A", 176: "B", 177: "C", 178: "D", 179: "A", 180: "B"
 }
 
-# ===================================================================
 # HELPER FUNCTIONS
-# ===================================================================
 def get_fill_ratio(image, x, y, radius=5):
     """Calculates the fill ratio of dark pixels inside a circular ROI."""
     roi = image[y - radius : y + radius + 1, x - radius : x + radius + 1]
@@ -289,9 +285,7 @@ def display_full_omr_with_annotations(original_image, questions, student_answers
                cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
     return img_display
 
-# ===================================================================
-# STREAMLIT UI SETUP
-# ===================================================================
+# STREAMLIT 
 st.set_page_config(page_title="OMR Evaluation System", layout="wide")
 st.title("📄 Automated OMR Evaluation System")
 
@@ -299,9 +293,7 @@ st.title("📄 Automated OMR Evaluation System")
 current_dir = Path(__file__).parent
 BLANK_IMAGE_PATH = current_dir / "Blank_file.jfif"
 
-# ===================================================================
 # TABS: Instructions & App
-# ===================================================================
 tab_info, tab_app = st.tabs(["ℹ️ Instructions & Sample Sheet", "🚀 Evaluate OMR Sheet"])
 
 with tab_info:
@@ -315,10 +307,12 @@ with tab_info:
     """)
     
     st.divider()
-    
+
     # Download blank template
     if os.path.exists(BLANK_IMAGE_PATH):
         with open(BLANK_IMAGE_PATH, "rb") as file:
+
+            st.image(file)
             st.download_button(
                 label="📥 Download Blank OMR Sheet Template",
                 data=file,
@@ -332,7 +326,6 @@ with tab_info:
         st.info(f"Expected path: `{BLANK_IMAGE_PATH}`")
 
 with tab_app:
-    # Verify blank template exists
     if not os.path.exists(BLANK_IMAGE_PATH):
         st.error(f"❌ Blank image missing at '{BLANK_IMAGE_PATH}'")
         st.info("Please ensure `Blank_file.jfif` is in the repository root directory.")
@@ -364,9 +357,7 @@ with tab_app:
         
         filled_gray = cv.cvtColor(filled_img, cv.COLOR_BGR2GRAY)
 
-        # ===========================================================
         # EXTRACT ROLL NUMBER & TEST ID
-        # ===========================================================
         roll_area_blank = blank_gray[155:380, 35:240]
         roll_area_filled = filled_gray[155:380, 35:240]
         test_id_area_blank = blank_gray[155:380, 250:360]
@@ -375,9 +366,7 @@ with tab_app:
         roll_number = parse_digit_grid(roll_area_blank, roll_area_filled)
         test_id = parse_digit_grid(test_id_area_blank, test_id_area_filled)
 
-        # ===========================================================
         # EXTRACT ANSWERS
-        # ===========================================================
         blank_answer_area = blank_gray[400:980, 70:690]
         filled_answer_area = filled_gray[400:980, 70:690]
 
@@ -402,9 +391,7 @@ with tab_app:
             else:
                 student_answers[q_num] = "BLANK"
 
-        # ===========================================================
         # CALCULATE SCORES
-        # ===========================================================
         correct_count = wrong_count = blank_count = multiple_count = 0
         total_score = 0
         question_details = {}
@@ -443,9 +430,7 @@ with tab_app:
         max_possible_marks = total_questions * MARKS_CORRECT
         percentage = (total_score / max_possible_marks) * 100 if max_possible_marks > 0 else 0
 
-        # ===========================================================
         # DISPLAY ANNOTATED OMR
-        # ===========================================================
         st.subheader("📄 Full OMR Sheet with Annotations")
         annotated_full = display_full_omr_with_annotations(
             filled_img, questions, student_answers, ANSWER_KEY, 
@@ -454,9 +439,7 @@ with tab_app:
         st.image(annotated_full, channels="BGR", use_container_width=True)
         st.caption("✅ Green = Correct | ❌ Red = Wrong | ⚪ Gray = Not Selected")
 
-        # ===========================================================
         # DISPLAY RESULTS
-        # ===========================================================
         st.divider()
         
         col_info, col_score = st.columns(2)
@@ -510,9 +493,7 @@ with tab_app:
         """
         st.markdown(result_html, unsafe_allow_html=True)
 
-        # ===========================================================
         # DOWNLOAD BUTTONS
-        # ===========================================================
         st.divider()
         st.subheader("📥 Download Reports")
         
@@ -556,9 +537,8 @@ with tab_app:
                     use_container_width=True
                 )
 
-        # ===========================================================
         # DETAILED QUESTION ANALYSIS
-        # ===========================================================
+        #                                                   
         with st.expander("📋 Show Detailed Question-wise Analysis", expanded=False):
             df_data = [
                 {
